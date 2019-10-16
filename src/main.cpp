@@ -55,7 +55,7 @@ int main() {
   int lane = 1;
 
   // have a reference velocity close to limit
-  double ref_vel = 49.5; // MPH
+  double ref_vel = 0.; // MPH
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy, &lane, &ref_vel]
@@ -123,9 +123,16 @@ int main() {
 
               if ((check_car_s > car_s) && (check_car_s - car_s) < 30) {
                 // lower reference velocity and flag lane changing
-                ref_vel = 29.5; //MPH
+                // ref_vel = 29.5; //MPH
+                too_close = true;
               }
             }
+          }
+
+          if (too_close) {
+            ref_vel -= 0.224;
+          } else if (ref_vel < 49.5) {
+            ref_vel += 0.224;
           }
 
           vector<double> ptsx;
