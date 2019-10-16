@@ -101,15 +101,40 @@ int main() {
            */
           // create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
           // interoplate these waypoints with a spline and fill it with more waypoints that control speed
+          int prev_size = previous_path_x.size();
+
+          if (prev_size > 0) {
+            car_s = end_path_s;
+          }
+
+          bool too_close = false;
+
+          // matching velocity of the car in front
+          for (int i = 0; i < sensor_fusion.size(); i++) {
+            float d = sensor_fusion[i][6];
+            if (d < (2 + 4 * lane + 2) && d > (2 + 4 * lane - 2)) {
+              double vx = sensor_fusion[i][3];
+              double vy = sensor_fusion[i][4];
+              double check_speed = sqrt(vx * vx + vy * vy);
+              double check_car_s = sensor_fusion[i][5];
+
+              // looking at where is the car in the future
+              check_car_s += (double)prev_size * 0.02 * check_speed;
+
+              if ((check_car_s > car_s) && (check_car_s - car_s) < 30) {
+                // lower reference velocity and flag lane changing
+                ref_vel = 29.5; //MPH
+              }
+            }
+          }
+
           vector<double> ptsx;
           vector<double> ptsy;
 
           // reference x, y, yaw
           double ref_x = car_x;
           double ref_y = car_y;
-          double ref_yaw = deg2rad(car_yaw);
-
-          int prev_size = previous_path_x.size();
+          double ref_yaw = deg2rad(car_yaw);         
 
           // if previous size is almost empty, use the car as starting reference
           if (prev_size < 2) {
