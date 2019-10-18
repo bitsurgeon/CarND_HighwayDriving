@@ -95,53 +95,81 @@ int main() {
           //   of the road.
           auto sensor_fusion = j[1]["sensor_fusion"];
 
-          /**
-           * TODO: define a path made up of (x,y) points that the car will visit
-           *   sequentially every .02 seconds
-           */
-          // create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
-          // interoplate these waypoints with a spline and fill it with more waypoints that control speed
           int prev_size = previous_path_x.size();
 
           if (prev_size > 0) {
             car_s = end_path_s;
           }
 
-          bool too_close = false;
-
-          // matching velocity of the car in front
+          // * prediction
+          bool isCarAhead = false;
+          bool isCarOnLeft = false;
+          bool isCarOnRight = false;
           for (int i = 0; i < sensor_fusion.size(); i++) {
-            float d = sensor_fusion[i][6];
-            if (d < (2 + 4 * lane + 2) && d > (2 + 4 * lane - 2)) {
+            // check lane for target car
+              float d = sensor_fusion[i][6];
+              int check_lane = -1;
+              if (d > 0 && d < 4) {
+                  check_lane = 0;
+              } else if (d > 4 && d < 8) {
+                  check_lane = 1;
+              } else if (d > 8 && d < 12) {
+                  check_lane = 2;
+              }
+              if (check_lane < 0) {
+                  continue;
+              }
+
+              // check target car speed
               double vx = sensor_fusion[i][3];
               double vy = sensor_fusion[i][4];
               double check_speed = sqrt(vx * vx + vy * vy);
+
+              // check target car distance in future
               double check_car_s = sensor_fusion[i][5];
+              check_car_s += ((double)prev_size * 0.02 * check_speed);
 
-              // looking at where is the car in the future
-              check_car_s += (double)prev_size * 0.02 * check_speed;
-
-              if ((check_car_s > car_s) && (check_car_s - car_s) < 30) {
-                // lower reference velocity and flag lane changing
-                // ref_vel = 29.5; //MPH
-                too_close = true;
+              if (check_lane == lane) {
+                  isCarAhead |= check_car_s > car_s && check_car_s - car_s < 30;
+              } else if (check_lane - lane == -1) {
+                  isCarOnLeft |= car_s - check_car_s < 15 && check_car_s - car_s < 15;
+              } else if (check_lane - lane == 1) {
+                  isCarOnRight |= car_s - check_car_s < 15 && check_car_s - car_s < 15;
               }
-            }
           }
 
-          if (too_close) {
-            ref_vel -= 0.224;
-          } else if (ref_vel < 49.5) {
-            ref_vel += 0.224;
+          // * behavior planing
+          double vel_adj = 0;
+          const double MAX_SPEED = 49.5;
+          const double MAX_ACC = .224;
+          if (isCarAhead) {
+            // considering change lane
+              if (!isCarOnLeft && lane != 0) {
+                  lane--;
+              } else if (!isCarOnRight && lane != 2) {
+                  lane++;
+              } else {
+                // not suitable to change lane
+                  vel_adj -= MAX_ACC;
+              }
+          } else {
+            // no car in front, speed up to speed limit
+              if (ref_vel < MAX_SPEED) {
+                  vel_adj += MAX_ACC;
+              }
           }
 
+          // * trajectory generation - JMT using spline
+
+          // create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
+          // interoplate these waypoints with a spline and fill it with more waypoints that control speed
           vector<double> ptsx;
           vector<double> ptsy;
 
           // reference x, y, yaw
           double ref_x = car_x;
           double ref_y = car_y;
-          double ref_yaw = deg2rad(car_yaw);         
+          double ref_yaw = deg2rad(car_yaw);
 
           // if previous size is almost empty, use the car as starting reference
           if (prev_size < 2) {
@@ -171,10 +199,9 @@ int main() {
           }
 
           // add evenly 30m spaced points ahead of the starting reference in Frenet
-          // (2 + 4 * lane)
-          vector<double> next_wp0 = getXY(car_s + 30, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-          vector<double> next_wp1 = getXY(car_s + 60, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-          vector<double> next_wp2 = getXY(car_s + 90, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+          vector<double> next_wp0 = getXY(car_s + 30, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
+          vector<double> next_wp1 = getXY(car_s + 60, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
+          vector<double> next_wp2 = getXY(car_s + 90, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
           ptsx.push_back(next_wp0[0]);
           ptsx.push_back(next_wp1[0]);
@@ -215,6 +242,12 @@ int main() {
 
           // fill up rest of the path planning waypoints
           for (int i = 0; i <= 50 - prev_size; i++) {
+
+            ref_vel += vel_adj;
+              if ( ref_vel > MAX_SPEED ) {
+                ref_vel = MAX_SPEED;
+              }
+
             double N = target_dist / (0.02 * ref_vel / 2.24);
             double x_point = x_add_on + target_x / N;
             double y_point = s(x_point);
