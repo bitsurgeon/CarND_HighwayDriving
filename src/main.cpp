@@ -133,11 +133,11 @@ int main() {
                             isCarAhead |=
                                 check_car_s > car_s && check_car_s - car_s < 30;
                         } else if (check_lane - lane == -1) {
-                            isCarOnLeft |= car_s - check_car_s < 15 &&
-                                           check_car_s - car_s < 15;
+                            isCarOnLeft |= car_s - check_car_s < 20 &&
+                                           check_car_s - car_s < 20;
                         } else if (check_lane - lane == 1) {
-                            isCarOnRight |= car_s - check_car_s < 15 &&
-                                            check_car_s - car_s < 15;
+                            isCarOnRight |= car_s - check_car_s < 20 &&
+                                            check_car_s - car_s < 20;
                         }
                     }
 
